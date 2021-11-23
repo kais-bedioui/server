@@ -26,29 +26,19 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import argparse
 
-import torch
-from torch import nn
-import torch_neuron
+def genTorchModel(name, batch_size):
+    class PyAddSubNet(nn.Module):
+        """
+        Simple AddSub network in PyTorch. This network outputs the sum and
+        subtraction of the inputs.
+        """
+        def __init__(self):
+            super(PyAddSubNet, self).__init__()
 
-import os
-import shutil
-import tensorflow as tf
-import tensorflow.neuron as tfn
-
-class PyAddSubNet(nn.Module):
-    """
-    Simple AddSub network in PyTorch. This network outputs the sum and
-    subtraction of the inputs.
-    """
-    def __init__(self):
-        super(PyAddSubNet, self).__init__()
-
-    def forward(self, input0, input1):
-        return torch.sub(input0, input1, alpha=-1), torch.sub(input0,
-                                                                input1,
-                                                                alpha=1)
-
-def genTorchModel(batch_size):
+        def forward(self, input0, input1):
+            return torch.sub(input0, input1, alpha=-1), torch.sub(input0,
+                                                                    input1,
+                                                                    alpha=1)
     model = PyAddSubNet()
     model.eval()
     batch_size = 1
@@ -58,28 +48,26 @@ def genTorchModel(batch_size):
     model_neuron = torch.neuron.trace(model,
                                     example_inputs,
                                     dynamic_batch_size=True)
-    model_neuron.save('add_sub_model.pt')
+    model_neuron.save('{}.pt'.format(name))
 
-
-class TFAddSubNet(tf.Module):
-    """
-    Simple AddSub network in Tensorflow. This network outputs the sum and
-    subtraction of the inputs.
-    """
-    def __init__(self):
-        super(TFAddSubNet, self).__init__()
-    
-    @tf.function
-    def __call__(self, input0, input1):
-        output0=tf.add(input0, input1)
-        output1=tf.subtract(input0, input1)
-        return output0, output1
-
-def genTFModel(batch_size, tfVersion):
+def genTFModel(name, batch_size, tfVersion):
+    class TFAddSubNet(tf.Module):
+        """
+        Simple AddSub network in Tensorflow. This network outputs the sum and
+        subtraction of the inputs.
+        """
+        def __init__(self):
+            super(TFAddSubNet, self).__init__()
+        
+        @tf.function
+        def __call__(self, input0, input1):
+            output0=tf.add(input0, input1)
+            output1=tf.subtract(input0, input1)
+            return output0, output1
     model = TFAddSubNet()
     # Set up model directory
     model_dir = os.path.join('$PWD', 'add_sub_model')
-    compiled_model_dir = os.path.join('$PWD', 'add_sub_neuron')
+    compiled_model_dir = os.path.join('$PWD', name)
     shutil.rmtree(model_dir, ignore_errors=True)
     shutil.rmtree(compiled_model_dir, ignore_errors=True)
     if (tfVersion == 1):
@@ -125,7 +113,15 @@ if __name__ == '__main__':
     if len(unparsed) > 0:
         raise Exception("Unrecognized options: {}".format(unparsed))
     if FLAGS.model_type == 'tensorflow':
-        genTFModel(FLAGS.batch_size, FLAGS.tf_version)
+        import os
+        import shutil
+        import tensorflow as tf
+        import tensorflow.neuron as tfn
+        print("name is {}".format(FLAGS.name))
+        genTFModel(FLAGS.name, FLAGS.batch_size, FLAGS.tf_version)
     elif FLAGS.model_type == 'pytorch':
-        genTorchModel(FLAGS.batch_size)
-    
+        import torch
+        from torch import nn
+        import torch_neuron
+        print("name is {}".format(FLAGS.name))
+        genTorchModel(FLAGS.name, FLAGS.batch_size)
